@@ -89,4 +89,64 @@ public class ReservationService {
             throw new InternalServerErrorException("Problems validating reservation data.");
         }
     }
+
+    public void modifyReservation(ModifyCampsiteReservationRequest request, String reservationId) throws InternalServerErrorException, BadRequestException, ConflictException {
+        validate(request);
+
+        Optional<ReservationEntity> reservationEntityOptional = reservationRepository.findByExternalId(reservationId);
+        if (reservationEntityOptional.isPresent()) {
+            if (reservationEntityOptional.get().getStatus() == Status.CANCELLED.getValue()) {
+                throw new BadRequestException("Reservation is cancelled.");
+            }
+        } else {
+            throw new BadRequestException("Reservation not found.");
+        }
+
+        Integer arrivalDateInt = DateUtil.toInteger(request.getArrivalDate());
+        Integer departureDateInt = DateUtil.toInteger(request.getDepartureDate());
+        ReservationEntity reservationEntity = reservationEntityOptional.get();
+
+        byte result = reservationRepository.modifyReservation(arrivalDateInt, departureDateInt, Status.ACTIVE.getValue(), reservationEntity.getId());
+        if (result > 0) {
+            throw new ConflictException("Already exists a reservation for those dates.");
+        }
+    }
+
+    public void cancelReservation(String reservationId) throws BadRequestException {
+        ReservationEntity reservationEntity = reservationRepository.findByExternalId(reservationId)
+                .orElseThrow(() -> new BadRequestException("Reservation not found."));
+        if (reservationEntity.getStatus() == Status.ACTIVE.getValue()) {
+            reservationEntity.setCancelledAt(new Date());
+            reservationEntity.setStatus(Status.CANCELLED.getValue());
+            reservationRepository.save(reservationEntity);
+        }
+    }
+
+    public List<String> getAllAvailableDates(Integer startDateInt, Integer endDateInt) throws BadRequestException {
+        if (startDateInt > endDateInt) {
+            throw new BadRequestException("Start date can not be greater than end date.");
+        }
+        if (startDateInt.equals(endDateInt)) {
+            throw new BadRequestException("Interval can not be the same day.");
+        }
+
+        List<ReservationEntity> reservations = reservationRepository.findBetweenIntervalAndActives(startDateInt, endDateInt, Status.ACTIVE.getValue());
+
+        List<ReservationEntity> reservationEntities = reservations.stream()
+                .sorted(Comparator.comparing(ReservationEntity::getArrivalDate))
+                .collect(Collectors.toList());
+
+        Integer initInterval = startDateInt;
+        List<String> intervals = new ArrayList<>();
+        for (ReservationEntity reservationEntity : reservationEntities) {
+            if (initInterval < reservationEntity.getArrivalDate()) {
+                intervals.add(String.format("%s - %s", DateUtil.toString(initInterval), DateUtil.toString(reservationEntity.getArrivalDate())));
+            }
+            initInterval = reservationEntity.getDepartureDate();
+        }
+        if (initInterval < endDateInt) {
+            intervals.add(String.format("%s - %s", DateUtil.toString(initInterval), DateUtil.toString(endDateInt)));
+        }
+        return intervals;
+    }
 }

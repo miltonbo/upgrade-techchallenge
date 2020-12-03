@@ -49,4 +49,49 @@ public class ReservationsController {
         }
     }
 
+    @PutMapping("/{reservationId}")
+    public ResponseEntity modifyReservation(@RequestBody ModifyCampsiteReservationRequest request, @PathVariable("reservationId") String reservationId) {
+        try {
+            reservationService.modifyReservation(request, reservationId);
+            return new ResponseEntity(HttpStatus.OK);
+        } catch (ApiException e) {
+            return new ResponseEntity(e.getError(), e.getStatus());
+        }
+    }
+
+    @DeleteMapping("/{reservationId}")
+    public ResponseEntity cancelReservation(@PathVariable("reservationId") String reservationId) {
+        try {
+            reservationService.cancelReservation(reservationId);
+            return new ResponseEntity(HttpStatus.OK);
+        } catch (ApiException e) {
+            return new ResponseEntity(e.getError(), e.getStatus());
+        }
+    }
+
+    @GetMapping("/available-dates")
+    public ResponseEntity<List<String>> getAvailableDates(@RequestParam(value = "startDate", required = false) String startDate,
+                                                          @RequestParam(value = "endDate", required = false) String endDate) {
+        Integer startDateInt;
+        if (StringUtils.hasLength(startDate)) {
+            startDateInt = DateUtil.toInteger(startDate);
+        } else {
+            startDateInt = DateUtil.toInteger(new Date());
+        }
+
+        Integer endDateInt;
+        if (StringUtils.hasLength(endDate)) {
+            endDateInt = DateUtil.toInteger(endDate);
+        } else {
+            endDateInt = DateUtil.toInteger(DateUtil.addDays(DateUtil.toDate(startDateInt), 30));
+        }
+
+        try {
+            List<String> results = reservationService.getAllAvailableDates(startDateInt, endDateInt);
+            return new ResponseEntity(results, HttpStatus.OK);
+        } catch (ApiException e) {
+            return new ResponseEntity(e.getError(), e.getStatus());
+        }
+    }
+
 }
